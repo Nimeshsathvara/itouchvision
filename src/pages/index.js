@@ -1,113 +1,237 @@
-import Image from "next/image";
-import { Geist, Geist_Mono } from "next/font/google";
+import React, { useState, useEffect } from "react";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+const Index = () => {
+  const [postcode, setPostcode] = useState("");
+  const [addresses, setAddresses] = useState([]);
+  const [selectedAddress, setSelectedAddress] = useState("");
+  const [error, setError] = useState("");
+  const [collectionDays, setCollectionDays] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+  const validPostcodes = ["NP18 2LE", "NP20 3BQ", "NP19 9QQ", "NP19 8NR"];
 
-export default function Home() {
+  const fetchAddresses = async (postcode) => {
+    if (!validPostcodes.includes(postcode.trim().toUpperCase())) {
+      setAddresses([]);
+      setError("Please enter a valid postcode.");
+      setCollectionDays([]);
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch(
+        "https://iweb.itouchvision.com/portal/itouchvision/kmbd_demo/address",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            P_GUID: "FF93E12280E5471FE053A000A8C08BEB",
+            P_POSTCODE: postcode.trim().toUpperCase(),
+          }),
+        }
+      );
+
+      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+      const data = await response.json();
+      console.log("Address API Response:", data);
+
+      if (data?.ADDRESS?.length > 0) {
+        setAddresses(data.ADDRESS);
+        setCollectionDays([]);
+      } else {
+        setAddresses([]);
+        setError("No addresses found for this postcode.");
+        setCollectionDays([]);
+      }
+    } catch (err) {
+      console.error("Error fetching addresses:", err);
+      setError("Failed to fetch addresses. Please try again later.");
+      setAddresses([]);
+      setCollectionDays([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCollectionDays = async (uprn) => {
+    setLoading(true);
+    setError("");
+    setCollectionDays([]);
+
+    try {
+      console.log("Fetching collection days for UPRN:", uprn);
+
+      const response = await fetch(
+        "https://iweb.itouchvision.com/portal/itouchvision/kmbd_demo/collectionDay",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            P_GUID: "FF93E12280E5471FE053A000A8C08BEB",
+            P_UPRN: uprn,
+            P_CLIENT_ID: 130,
+            P_COUNCIL_ID: 260,
+          }),
+        }
+      );
+
+      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+      const data = await response.json();
+      console.log("Collection Days API Response:", data);
+
+      if (data?.collectionDay?.length > 0) {
+        const uniqueCollectionDays = [];
+        const seenTypes = new Set();
+
+        data.collectionDay.forEach((collection) => {
+          if (!seenTypes.has(collection.binType)) {
+            seenTypes.add(collection.binType);
+            uniqueCollectionDays.push(collection);
+          }
+        });
+
+        setCollectionDays(uniqueCollectionDays);
+        setError("");
+      } else {
+        setCollectionDays([]);
+        setError("No collection available for your address.");
+      }
+    } catch (err) {
+      console.error("Error fetching collection days:", err);
+      setError("Failed to fetch collection days. Please try again later.");
+      setCollectionDays([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (postcode.trim()) {
+      fetchAddresses(postcode);
+    } else {
+      setAddresses([]);
+      setError("");
+      setCollectionDays([]);
+    }
+  }, [postcode]);
+
+  const handlePostcodeChange = (e) => {
+    setPostcode(e.target.value);
+    setSelectedAddress("");
+  };
+
+  const handleAddressSelect = (e) => {
+    const selected = e.target.value;
+    setSelectedAddress(selected);
+    const selectedAddressObject = addresses.find(
+      (address) => address.FULL_ADDRESS === selected
+    );
+    if (selectedAddressObject) {
+      fetchCollectionDays(selectedAddressObject.UPRN);
+    } else {
+      setCollectionDays([]);
+    }
+  };
+
+  const clearAddress = () => {
+    setPostcode("");
+    setAddresses([]);
+    setSelectedAddress("");
+    setCollectionDays([]);
+    setError("");
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/pages/index.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="p-5">
+      <div className="border-t-4 border-r-2">
+        <h1 className="text-3xl font-bold">Find out your rubbish <br /> collection day </h1>
+        <p>Check when your rubbish collection</p>
+
+        <div className="flex flex-col md:flex-row gap-[20px]">
+          <div className="w-full md:w-[70%]">
+            <div className="bg-gray-200 py-5 px-3">
+              <h1 className="text-[14px] font-semibold">Enter your postcode</h1>
+              <h1 className="text-[12px] text-gray-600 mt-2">For example SWA1A 2AA</h1>
+
+              <input
+                type="text"
+                className="border border-black bg-white p-1 mt-2 w-full md:w-auto"
+                value={postcode}
+                onChange={handlePostcodeChange}
+              />
+              {error && <p className="text-red-500 mt-2">{error}</p>}
+
+              <label htmlFor="addresses" className="block mt-3 mb-2 text-[14px] font-semibold">
+                Select an address
+              </label>
+              <select
+                id="addresses"
+                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm w-full md:w-1/4 p-2"
+                value={selectedAddress}
+                onChange={handleAddressSelect}
+              >
+                <option value="">Select an address</option>
+                {addresses.map((address, index) => (
+                  <option key={index} value={address.FULL_ADDRESS}>
+                    {address.FULL_ADDRESS}
+                  </option>
+                ))}
+              </select>
+
+              <p
+                className="text-blue-500 underline decoration-blue-500 mt-3 text-[13px] cursor-pointer"
+                onClick={clearAddress}
+              >
+                Clear Address and Start Again
+              </p>
+            </div>
+
+            {collectionDays.length > 0 && (
+              <div className="mt-5">
+                <p className="text-lg font-semibold">Your Next Collection</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  {collectionDays.map((collection, index) => (
+                    <div
+                      key={index}
+                      className="p-3 text-white text-[14px]"
+                      style={{ backgroundColor: collection.binColor }}
+                    >
+                      <p className="font-bold">{collection.binType}</p>
+                      <p className="text-sm text-gray-200">{collection.followingDay}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="border-t-2 border-t-blue-600 w-full md:w-[30%] mt-5 md:mt-0">
+            <h1 className="text-black font-semibold text-[14px] mt-3">Related content</h1>
+            <p className="text-[13px] underline decoration-blue-500 text-blue-500 mt-3">Add to your calendar</p>
+            <p className="text-[13px] underline decoration-blue-500 text-blue-500 mt-3">Download printable schedule</p>
+            <p className="text-[13px] underline decoration-blue-500 text-blue-500 mt-3">
+              Join our rubbish collection notification list
+            </p>
+
+            <h1 className="text-black font-semibold text-[14px] mt-3">More Services</h1>
+            <p className="text-[13px] underline decoration-blue-500 text-blue-500 mt-3">Request a replacement container</p>
+            <p className="text-[13px] underline decoration-blue-500 text-blue-500 mt-3">Report a missed collection</p>
+            <p className="text-[13px] underline decoration-blue-500 text-blue-500 mt-3">Book a bulky collection</p>
+            <p className="text-[13px] underline decoration-blue-500 text-blue-500 mt-3">
+              Request an assisted collection
+            </p>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
     </div>
   );
-}
+};
+
+export default Index;
