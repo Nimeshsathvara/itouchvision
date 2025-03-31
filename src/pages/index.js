@@ -1,3 +1,4 @@
+import Image from "next/image";
 import React, { useState, useEffect } from "react";
 
 const Index = () => {
@@ -7,6 +8,7 @@ const Index = () => {
   const [error, setError] = useState("");
   const [collectionDays, setCollectionDays] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const validPostcodes = ["NP18 2LE", "NP20 3BQ", "NP19 9QQ", "NP19 8NR"];
 
@@ -38,7 +40,6 @@ const Index = () => {
 
       if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
       const data = await response.json();
-      console.log("Address API Response:", data);
 
       if (data?.ADDRESS?.length > 0) {
         setAddresses(data.ADDRESS);
@@ -49,7 +50,6 @@ const Index = () => {
         setCollectionDays([]);
       }
     } catch (err) {
-      console.error("Error fetching addresses:", err);
       setError("Failed to fetch addresses. Please try again later.");
       setAddresses([]);
       setCollectionDays([]);
@@ -62,10 +62,8 @@ const Index = () => {
     setLoading(true);
     setError("");
     setCollectionDays([]);
-
+    
     try {
-      console.log("Fetching collection days for UPRN:", uprn);
-
       const response = await fetch(
         "https://iweb.itouchvision.com/portal/itouchvision/kmbd_demo/collectionDay",
         {
@@ -84,7 +82,6 @@ const Index = () => {
 
       if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
       const data = await response.json();
-      console.log("Collection Days API Response:", data);
 
       if (data?.collectionDay?.length > 0) {
         const uniqueCollectionDays = [];
@@ -98,13 +95,11 @@ const Index = () => {
         });
 
         setCollectionDays(uniqueCollectionDays);
-        setError("");
       } else {
         setCollectionDays([]);
         setError("No collection available for your address.");
       }
     } catch (err) {
-      console.error("Error fetching collection days:", err);
       setError("Failed to fetch collection days. Please try again later.");
       setCollectionDays([]);
     } finally {
@@ -113,7 +108,7 @@ const Index = () => {
   };
 
   useEffect(() => {
-    if (postcode.trim()) {
+    if (postcode.trim().length > 6) {
       fetchAddresses(postcode);
     } else {
       setAddresses([]);
@@ -127,17 +122,16 @@ const Index = () => {
     setSelectedAddress("");
   };
 
-  const handleAddressSelect = (e) => {
-    const selected = e.target.value;
-    setSelectedAddress(selected);
-    const selectedAddressObject = addresses.find(
-      (address) => address.FULL_ADDRESS === selected
-    );
-    if (selectedAddressObject) {
-      fetchCollectionDays(selectedAddressObject.UPRN);
-    } else {
-      setCollectionDays([]);
-    }
+  const handleAddressInputChange = (e) => {
+    const value = e.target.value;
+    setSelectedAddress(value);
+    setShowDropdown(true);
+  };
+
+  const handleAddressSelect = (address) => {
+    setSelectedAddress(address.FULL_ADDRESS);
+    setShowDropdown(false);
+    fetchCollectionDays(address.UPRN);
   };
 
   const clearAddress = () => {
@@ -151,7 +145,9 @@ const Index = () => {
   return (
     <div className="p-5">
       <div className="border-t-4 border-r-2">
-        <h1 className="text-3xl font-bold">Find out your rubbish <br /> collection day </h1>
+        <h1 className="text-3xl font-bold">
+          Find out your rubbish <br /> collection day
+        </h1>
         <p>Check when your rubbish collection</p>
 
         <div className="flex flex-col md:flex-row gap-[20px]">
@@ -169,26 +165,38 @@ const Index = () => {
               {error && <p className="text-red-500 mt-2">{error}</p>}
 
               <label htmlFor="addresses" className="block mt-3 mb-2 text-[14px] font-semibold">
-                Select an address
+                Select an address or type
               </label>
-              <select
-                id="addresses"
-                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm w-full md:w-1/4 p-2"
-                value={selectedAddress}
-                onChange={handleAddressSelect}
-              >
-                <option value="">Select an address</option>
-                {addresses.map((address, index) => (
-                  <option key={index} value={address.FULL_ADDRESS}>
-                    {address.FULL_ADDRESS}
-                  </option>
-                ))}
-              </select>
 
-              <p
-                className="text-blue-500 underline decoration-blue-500 mt-3 text-[13px] cursor-pointer"
-                onClick={clearAddress}
-              >
+              <input
+                type="text"
+                id="addressInput"
+                className="border border-gray-300 bg-white p-2 w-full"
+                placeholder="Start typing your address..."
+                value={selectedAddress}
+                onChange={handleAddressInputChange}
+                onFocus={() => setShowDropdown(true)}
+              />
+
+              {showDropdown && addresses.length > 0 && (
+                <ul className="bg-white border border-gray-300 mt-2 max-h-40 overflow-y-auto">
+                  {addresses
+                    .filter((address) =>
+                      address.FULL_ADDRESS.toLowerCase().includes(selectedAddress.toLowerCase())
+                    )
+                    .map((address, index) => (
+                      <li
+                        key={index}
+                        className="p-2 hover:bg-gray-100 cursor-pointer"
+                        onClick={() => handleAddressSelect(address)}
+                      >
+                        {address.FULL_ADDRESS}
+                      </li>
+                    ))}
+                </ul>
+              )}
+
+              <p className="text-blue-500 underline mt-3 text-[13px] cursor-pointer" onClick={clearAddress}>
                 Clear Address and Start Again
               </p>
             </div>
@@ -198,11 +206,7 @@ const Index = () => {
                 <p className="text-lg font-semibold">Your Next Collection</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   {collectionDays.map((collection, index) => (
-                    <div
-                      key={index}
-                      className="p-3 text-white text-[14px]"
-                      style={{ backgroundColor: collection.binColor }}
-                    >
+                    <div key={index} className="p-3 text-white text-[14px]" style={{ backgroundColor: collection.binColor }}>
                       <p className="font-bold">{collection.binType}</p>
                       <p className="text-sm text-gray-200">{collection.followingDay}</p>
                     </div>
@@ -210,23 +214,6 @@ const Index = () => {
                 </div>
               </div>
             )}
-          </div>
-
-          <div className="border-t-2 border-t-blue-600 w-full md:w-[30%] mt-5 md:mt-0">
-            <h1 className="text-black font-semibold text-[14px] mt-3">Related content</h1>
-            <p className="text-[13px] underline decoration-blue-500 text-blue-500 mt-3">Add to your calendar</p>
-            <p className="text-[13px] underline decoration-blue-500 text-blue-500 mt-3">Download printable schedule</p>
-            <p className="text-[13px] underline decoration-blue-500 text-blue-500 mt-3">
-              Join our rubbish collection notification list
-            </p>
-
-            <h1 className="text-black font-semibold text-[14px] mt-3">More Services</h1>
-            <p className="text-[13px] underline decoration-blue-500 text-blue-500 mt-3">Request a replacement container</p>
-            <p className="text-[13px] underline decoration-blue-500 text-blue-500 mt-3">Report a missed collection</p>
-            <p className="text-[13px] underline decoration-blue-500 text-blue-500 mt-3">Book a bulky collection</p>
-            <p className="text-[13px] underline decoration-blue-500 text-blue-500 mt-3">
-              Request an assisted collection
-            </p>
           </div>
         </div>
       </div>
